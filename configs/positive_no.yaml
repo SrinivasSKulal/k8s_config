@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: good-nginx-deployment
+  namespace: default # Specify a namespace for better organization
+  labels:
+    app: good-nginx
+spec:
+  replicas: 3 # Good practice: run multiple replicas for high availability
+  selector:
+    matchLabels:
+      app: good-nginx
+  template:
+    metadata:
+      labels:
+        app: good-nginx
+    spec:
+      # Good practice: Use a dedicated Service Account with minimal permissions
+      # serviceAccountName: my-service-account # Uncomment and define if needed
+      containers:
+        - name: nginx
+          image: nginx:1.23.3 # Good practice: Use specific, immutable image tags, NOT 'latest'
+          ports:
+            - containerPort: 80
+          resources:
+            requests: # Good practice: Define resource requests to ensure stable scheduling
+              memory: "64Mi"
+              cpu: "250m"
+            limits: # Good practice: Define resource limits to prevent resource exhaustion
+              memory: "128Mi"
+              cpu: "500m"
+          securityContext: # Good practice: Enhance container security
+            allowPrivilegeEscalation: false # Prevent processes from gaining more privileges
+            runAsNonRoot: true # Good practice: Ensure the container runs as a non-root user
+            runAsUser: 1000 # Specify a non-root user ID
+            readOnlyRootFilesystem: true # Good practice: Make the root filesystem read-only
+            capabilities:
+              drop: # Good practice: Drop unnecessary Linux capabilities
+                - ALL
+              add:
+                - NET_BIND_SERVICE # Example: if the app needs to bind to a low port (e.g., 80)
+          livenessProbe: # Good practice: Define liveness probe for automatic restart of unhealthy containers
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe: # Good practice: Define readiness probe to control traffic to ready containers
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 2
+      # Good practice: Define Pod Security Context if needed (e.g., to restrict overall pod capabilities)
+      # securityContext:
+      #   runAsNonRoot: true
+      #   seccompProfile:
+      #     type: RuntimeDefault
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: good-nginx-service
+  namespace: default # Specify the same namespace as the Deployment
+  labels:
+    app: good-nginx
+spec:
+  selector:
+    app: good-nginx
+  type: ClusterIP # Good practice: Use ClusterIP for internal services, avoid NodePort/LoadBalancer unless external access is required
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80

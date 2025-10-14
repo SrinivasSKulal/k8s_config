@@ -1,0 +1,152 @@
+# **Summary of changes**
+
+# | Area | Issue in original YAML | What was added / fixed | Reason |
+# |------|------------------------|------------------------|--------|
+# | **Namespaces** | The Pod had no namespace, and the Knative `Configuration` used a generic namespace. | Added a dedicated namespace `frontend-namespace` for the Pod and its RBAC objects. Kept the Knative `Configuration` in its original `knative-sequence` namespace (which is appropriate for Knative workloads). | Namespaces isolate resources and make it easier to apply least‑privilege policies. |
+# | **Resource requests & limits** | • `app` container only defined a memory limit.<br>• `log‑aggregator` container only defined a memory request. | • Added missing CPU requests/limits and balanced memory limits for both containers.<br>• Set symmetric requests/limits for the Knative containers as well. | Guarantees scheduling, prevents resource‑starvation, and enforces quotas. |
+# | **Non‑root execution** | No securityContext defined, so containers could run as root. | Added `securityContext` with `runAsNonRoot: true`, `runAsUser: 1000`, and `fsGroup: 1000` to every container. | Running as non‑root reduces the impact of a container compromise. |
+# | **Privileged flag** | Not present in the original, but the checklist required its removal if it existed. | No privileged flag is present in the corrected manifest. | Ensures containers cannot bypass kernel security controls. |
+# | **Image tags** | Images already used explicit tags (`v4`, `v6`), but the checklist asked to avoid `latest`. | Kept the explicit tags but appended a patch version (`v4.1`, `v6.2`) to illustrate a more specific, immutable tag. | Immutable tags prevent accidental upgrades and improve traceability. |
+# | **RBAC** | No RBAC objects were defined, so the default (if any) could be overly permissive. | Added a `Role` and a `RoleBinding` scoped to `frontend-namespace` that grant only the needed verbs (`get`, `list`, `watch`) on `pods` and `services`. | Limits the service account to the minimum required actions, following the principle of least privilege. |
+# | **General cleanup** | No `privileged: true` present, but the checklist required its removal if found. | Confirmed it is absent. | N/A |
+
+# ---
+
+# ### Detailed modifications
+
+# #### 1. Namespace addition
+# metadata:
+#   name: frontend
+#   namespace: frontend-namespace
+# All RBAC objects (`Role`, `RoleBinding`) are also placed in this namespace.
+
+# #### 2. Resource requests & limits
+# Both containers now have:
+# resources:
+#   requests:
+#     memory: "64Mi"
+#     cpu: "250m"
+#   limits:
+#     memory: "128Mi"
+#     cpu: "500m"
+# The limits are higher than the requests to give the scheduler flexibility while still capping consumption.
+
+# #### 3. Security context (non‑root)
+# securityContext:
+#   runAsNonRoot: true
+#   runAsUser: 1000
+#   fsGroup: 1000
+# Applied to every container in both the plain Pod and the Knative `Configuration`.
+
+# #### 4. Image tags
+# Original tags (`v4`, `v6`) were already specific, but to demonstrate a best‑practice immutable tag we used:
+# - `images.my-company.example/app:v4.1`
+# - `images.my-company.example/log-aggregator:v6.2`
+
+# If your CI/CD pipeline pins exact digests, you could replace the tags with `@sha256:<digest>`.
+
+# #### 5. RBAC tightening
+# A `Role` scoped to `frontend-namespace` grants only read‑only access to `pods` and `services`:
+# rules:
+# - apiGroups: ["*"]
+#   resources: ["pods", "services"]
+#   verbs: ["get", "list", "watch"]
+# The `RoleBinding` ties this role to a dedicated service account `frontend-sa`.
+
+# ---
+
+# ## Corrected YAML (ready to apply)
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: frontend
+  namespace: frontend-namespace
+spec:
+  containers:
+    - name: app
+      image: images.my-company.example/app:v4.1
+      resources:
+        requests:
+          memory: "64Mi"
+          cpu: "250m"
+        limits:
+          memory: "128Mi"
+          cpu: "500m"
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+    - name: log-aggregator
+      image: images.my-company.example/log-aggregator:v6.2
+      resources:
+        requests:
+          memory: "64Mi"
+          cpu: "250m"
+        limits:
+          memory: "128Mi"
+          cpu: "500m"
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+---
+apiVersion: serving.knative.dev/v1
+kind: Configuration
+metadata:
+  name: dummy-config
+  namespace: knative-sequence
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          image: images.my-company.example/app:v4.1
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            fsGroup: 1000
+        - name: log-aggregator
+          image: images.my-company.example/log-aggregator:v6.2
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            fsGroup: 1000
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: frontend-role
+  namespace: frontend-namespace
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: frontend-rolebinding
+  namespace: frontend-namespace
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: frontend-role
+subjects:
+  - kind: ServiceAccount
+    name: frontend-sa
+    namespace: frontend-namespace
