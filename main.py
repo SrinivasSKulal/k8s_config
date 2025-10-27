@@ -23,7 +23,7 @@ def run_scan(file_path: str) -> str:
     """
 
     response = client.chat.completions.create(
-        model="llama-3.1-70b-versatile",
+        model="groq/compound",
         messages=[{"role": "user", "content": prompt}],
     )
 
