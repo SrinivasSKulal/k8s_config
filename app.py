@@ -1,50 +1,47 @@
 import streamlit as st
-from main import run_scan, auto_fix_file
+from main import run_scan, auto_fix_file, get_corrected_yaml_content
 
-st.set_page_config(
-    page_title="Kubernetes AI Config Checker", page_icon="📝", layout="centered"
+st.set_page_config(page_title="K8s Config Checker", page_icon="🧠", layout="centered")
+
+st.title("🧠 Kubernetes Config Checker & AutoFix Tool")
+st.caption(
+    "Powered by Groq | Analyze, fix, and improve Kubernetes YAML files automatically."
 )
 
-st.title("Kubernetes AI Config Checker")
-st.write(
-    "Upload a Kubernetes YAML file, and let AI detect and fix issues automatically!"
+uploaded_file = st.file_uploader(
+    "📤 Upload your Kubernetes YAML file", type=["yaml", "yml"]
 )
-
-uploaded_file = st.file_uploader("📁 Upload your Kubernetes YAML", type=["yaml", "yml"])
-
-autofix = st.checkbox("Enable Auto-Fix with Groq AI", value=False)
 
 if uploaded_file:
-    yaml_text = uploaded_file.read().decode("utf-8")
-    st.subheader("📄 File Content")
-    st.code(yaml_text, language="yaml")
+    # Save uploaded file
+    file_path = f"uploaded_{uploaded_file.name}"
+    with open(file_path, "wb") as f:
+        f.write(uploaded_file.getvalue())
 
-    with st.spinner("Scanning configuration..."):
-        issues = run_scan(yaml_text)
+    st.success(f"✅ File `{uploaded_file.name}` uploaded successfully!")
 
-    if issues:
-        st.subheader("🚨 Detected Issues")
-        for issue in issues:
-            color = (
-                "red"
-                if issue["severity"] == "High"
-                else "orange"
-                if issue["severity"] == "Medium"
-                else "blue"
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("🔍 Analyze Config"):
+            with st.spinner("Analyzing configuration with Groq..."):
+                report = run_scan(file_path)
+            st.subheader("🧾 Analysis Report")
+            st.text_area("Results", report, height=300)
+
+    with col2:
+        if st.button("🛠️ Auto Fix Config"):
+            with st.spinner("Fixing configuration..."):
+                output_path = auto_fix_file(file_path)
+                fixed_content = get_corrected_yaml_content(output_path)
+
+            st.subheader("✅ Corrected YAML Configuration")
+            st.code(fixed_content, language="yaml")
+
+            # Download button
+            st.download_button(
+                label="⬇️ Download Fixed YAML",
+                data=fixed_content,
+                file_name="corrected.yaml",
+                mime="text/yaml",
             )
-            st.markdown(
-                f"- <span style='color:{color};font-weight:bold'>[{issue['severity']}]</span> {issue['message']}",
-                unsafe_allow_html=True,
-            )
-    else:
-        st.success("✅ No issues found!")
-
-    if autofix:
-        st.subheader("🤖 Auto-Fixed YAML (AI Suggested)")
-        with st.spinner("Using Groq AI to fix issues..."):
-            fixed_yaml = auto_fix_file(yaml_text)
-        st.code(fixed_yaml, language="yaml")
-
-        st.download_button(
-            "⬇️ Download Fixed YAML", fixed_yaml, file_name="fixed_config.yaml"
-        )
