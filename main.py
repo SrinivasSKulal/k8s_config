@@ -310,6 +310,8 @@ Original YAML:
 
         print(traceback.format_exc())
 
+    return fixed_yaml or ""
+
 
 def get_corrected_yaml_content(file_content: str) -> str:
     """Return the corrected YAML content as a string (for Streamlit display)."""
