@@ -12,6 +12,112 @@ load_dotenv()
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
+def check_config_text(yaml_text, file_label="uploaded-file"):
+    """
+    Performs rule-based scanning for common Kubernetes misconfigurations.
+    Takes YAML content as a string instead of a file path.
+    """
+    issues = []
+
+    try:
+        docs = yaml.safe_load_all(yaml_text)
+    except yaml.YAMLError as e:
+        return [{
+            "severity": "Low",
+            "message": f"YAML parsing error in {file_label}: {e}",
+            "snippet": ""
+        }]
+    except Exception as e:
+        return [{
+            "severity": "Low",
+            "message": f"Unexpected error while parsing {file_label}: {e}",
+            "snippet": ""
+        }]
+
+    for obj in docs:
+        if not obj:
+            continue
+
+        kind = obj.get("kind", "Unknown")
+        metadata = obj.get("metadata", {})
+        spec = obj.get("spec", {})
+
+        containers = []
+        if "containers" in spec:
+            containers = spec["containers"]
+        elif "template" in spec and "spec" in spec["template"]:
+            containers = spec["template"]["spec"].get("containers", [])
+
+        # --- Container-Level Checks ---
+        for c in containers:
+            name = c.get("name", "unknown-container")
+            resources = c.get("resources", {})
+
+            # Check for missing resource limits/requests
+            if "limits" not in resources or "requests" not in resources:
+                issues.append({
+                    "severity": "Medium",
+                    "message": f"{file_label} [{kind}/{metadata.get('name', '')}] Container '{name}' missing resource requests/limits",
+                    "snippet": yaml.dump(c),
+                })
+
+            # Security context checks
+            security = c.get("securityContext", {})
+            if security.get("privileged", False):
+                issues.append({
+                    "severity": "High",
+                    "message": f"{file_label} [{kind}/{metadata.get('name', '')}] Container '{name}' runs as privileged",
+                    "snippet": yaml.dump(c),
+                })
+
+            if security.get("runAsUser", 0) == 0:
+                issues.append({
+                    "severity": "High",
+                    "message": f"{file_label} [{kind}/{metadata.get('name', '')}] Container '{name}' runs as root user",
+                    "snippet": yaml.dump(c),
+                })
+
+            # Image tag check
+            image = c.get("image", "")
+            if ":latest" in image or image.endswith(":"):
+                issues.append({
+                    "severity": "Low",
+                    "message": f"{file_label} [{kind}/{metadata.get('name', '')}] Container '{name}' uses 'latest' image tag",
+                    "snippet": yaml.dump(c),
+                })
+
+        # --- Service Checks ---
+        if kind == "Service" and "namespace" not in metadata:
+            issues.append({
+                "severity": "Low",
+                "message": f"{file_label} [Service/{metadata.get('name', '')}] has no namespace specified",
+                "snippet": yaml.dump(obj),
+            })
+
+        if kind == "Service":
+            svc_type = spec.get("type", "ClusterIP")
+            if svc_type in ["LoadBalancer", "NodePort"]:
+                issues.append({
+                    "severity": "High",
+                    "message": f"{file_label} [Service/{metadata.get('name', '')}] uses {svc_type}, which may expose workloads externally",
+                    "snippet": yaml.dump(obj),
+                })
+
+        # --- RBAC Checks ---
+        if kind in ["Role", "ClusterRole"]:
+            rules = spec.get("rules", [])
+            for rule in rules:
+                verbs = rule.get("verbs", [])
+                resources = rule.get("resources", [])
+                if "*" in verbs or "*" in resources:
+                    issues.append({
+                        "severity": "High",
+                        "message": f"{file_label} [{kind}/{metadata.get('name', '')}] has overly permissive RBAC rule: verbs={verbs}, resources={resources}",
+                        "snippet": yaml.dump(rule),
+                    })
+
+    return issues
+
 def check_config(obj, file_path):
     """Performs rule-based scanning for common Kubernetes misconfigurations."""
     issues = []

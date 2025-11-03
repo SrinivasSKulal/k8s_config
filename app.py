@@ -1,5 +1,5 @@
 import streamlit as st
-from main import run_scan, auto_fix_file, get_corrected_yaml_content
+from main import run_scan, auto_fix_file, get_corrected_yaml_content, check_config_text
 import yaml
 
 # ---------------------- PAGE CONFIG ----------------------
@@ -15,6 +15,7 @@ st.markdown(
     """
     This tool automatically **detects, classifies, and fixes** Kubernetes YAML misconfigurations.  
     It uses **rule-based validation** + **Groq-powered AI** for semantic auto-correction.
+    Pleae avoid using large files due to file length
     """
 )
 st.divider()
@@ -32,7 +33,7 @@ if uploaded_file:
     st.code(yaml_text, language="yaml")
 
     with st.spinner("🔍 Scanning configuration for misconfigurations..."):
-        issues = run_scan(yaml_text)
+        issues = check_config_text(yaml_text)
 
     st.divider()
 

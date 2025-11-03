@@ -1,0 +1,46 @@
+
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Kubernetes Config Audit (AI Enhanced)</title>
+        <style>
+            body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 20px; }
+            .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+            th { background: #0078D4; color: white; }
+            tr:nth-child(even) { background: #f9f9f9; }
+            .severity-High { color: red; font-weight: bold; }
+            .severity-Medium { color: orange; font-weight: bold; }
+            .severity-Low { color: teal; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+    <div class="container">
+    <h1>🚀 Kubernetes Configuration Security Report (AI Enhanced)</h1>
+    <table>
+        <tr><th>Severity</th><th>Message</th><th>AI Suggestion</th></tr>
+    
+        <tr>
+            <td class="severity-Medium">Medium</td>
+            <td>configs/image.yaml [Pod/private-image-test-1] Container 'uses-private-image' missing resource requests/limits</td>
+            <td>Add a `resources` block with requests (cpu: 100m, memory: 128Mi) and limits (cpu: 200m, memory: 256Mi) to the container spec, e.g.:
+
+```yaml
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+```</td>
+        </tr>
+        
+        <tr>
+            <td class="severity-High">High</td>
+            <td>configs/image.yaml [Pod/private-image-test-1] Container 'uses-private-image' runs as root user</td>
+            <td>Add a `securityContext` with a non‑root `runAsUser` (e.g., `runAsUser: 1000`) to the container definition.</td>
+        </tr>
+        </table></div></body></html>
